@@ -1,0 +1,25 @@
+{
+  "name": "lokman-visuals",
+  "version": "0.1.0",
+  "description": "Visionner, annoter et corriger localement les vidéos de motion design HyperFrames.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lokman-visuals": "bin/lokman-visuals.js"
+  },
+  "scripts": {
+    "start": "node bin/lokman-visuals.js",
+    "test": "node --test test/unit/*.test.js",
+    "e2e": "node test/e2e.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@hyperframes/player": "0.8.229",
+    "hyperframes": "0.8.229"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
