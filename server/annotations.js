@@ -1,8 +1,8 @@
-// Annotations : `.lokman/annotations.json` dans le projet (versionnable avec git).
-import { lokmanPath, readJson, updateJson } from "./store.js";
+// Annotations : `.loktake/annotations.json` dans le projet (versionnable avec git).
+import { loktakePath, readJson, updateJson } from "./store.js";
 import { mapAnnotationAcrossRender, mapAnnotationThroughCut } from "../shared/timemap.js";
 
-const FILE = (dir) => lokmanPath(dir, "annotations.json");
+const FILE = (dir) => loktakePath(dir, "annotations.json");
 const EMPTY = { schema: 1, nextNumber: 1, annotations: [] };
 const STATUSES = new Set(["a_traiter", "a_verifier", "valide"]);
 

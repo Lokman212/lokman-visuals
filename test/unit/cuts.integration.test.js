@@ -9,7 +9,7 @@ import { renderMontage } from "../../server/cuts.js";
 import { probe } from "../../server/media.js";
 
 async function fixture(audioExpr) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lokman-cut-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loktake-cut-"));
   await fs.mkdir(path.join(dir, "renders"));
   const file = path.join(dir, "renders", "film.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=10",
@@ -30,7 +30,7 @@ test("coupe exacte à l'image, source intacte, saut audio réel détecté", asyn
   assert.ok(v.report.joints[0].framesMatch);
   assert.ok(v.report.checks.some((c) => c.level === "warn" && /Saut de niveau/.test(c.detail)), "saut audio signalé");
   assert.ok((await fs.readFile(path.join(dir, base.file))).equals(before), "le MP4 d'origine n'est pas modifié");
-  const side = JSON.parse(await fs.readFile(path.join(dir, v.file + ".lokman.json"), "utf8"));
+  const side = JSON.parse(await fs.readFile(path.join(dir, v.file + ".loktake.json"), "utf8"));
   assert.match(side.note, /code source HyperFrames n'a pas été modifié/);
   await fs.rm(dir, { recursive: true, force: true });
 });

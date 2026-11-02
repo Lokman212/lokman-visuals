@@ -1,10 +1,10 @@
-# Lokman Visuals
+# LokTake
 
 Application locale pour **visionner, annoter et corriger** les vidéos de motion design créées avec
 [HyperFrames](https://hyperframes.heygen.com), puis transmettre les demandes à Claude Code.
 
 ```
-Claude code la vidéo (HyperFrames) → npx hyperframes render → Lokman Visuals : je regarde,
+Claude code la vidéo (HyperFrames) → npx hyperframes render → LokTake : je regarde,
 je marque des instants et des plages, j'écris mes retours → « Copier pour Claude » →
 je colle dans Claude Code → Claude modifie le code source et produit un nouveau rendu → …
 ```
@@ -27,7 +27,7 @@ HyperFrames ou un dossier qui **contient** des projets (recherche sur 2 niveaux)
 reconnu par son `hyperframes.json` (ou un `index.html` contenant `data-composition-id`).
 
 Options : `--port 8093`, `--host 127.0.0.1`, `--no-open`. Plusieurs dossiers sont possibles.
-Variable d'environnement équivalente : `LOKMAN_ROOTS=~/videos:~/clients`.
+Variable d'environnement équivalente : `LOKTAKE_ROOTS=~/videos:~/clients`.
 
 Les versions sont les MP4 de `renders/` (y compris sous-dossiers) et ceux posés à la racine du
 projet. Un nouveau rendu est détecté automatiquement (vérification toutes les 5 s) ; s'il est apparu
@@ -39,14 +39,14 @@ depuis la dernière session, il est ouvert en priorité.
 l'adresse du projet et rend la main :
 
 ```bash
-node ~/Projets/lokman-visuals/bin/lokman-visuals.js ~/HyperFrames/mon-projet --background --no-open
+node ~/Projets/lokman-visuals/bin/loktake.js ~/HyperFrames/mon-projet --background --no-open
 ```
 
 Pour que Claude Code le fasse tout seul après chaque rendu et ouvre la vidéo dans le navigateur
 intégré, colle le contenu de [`docs/CLAUDE-snippet.md`](docs/CLAUDE-snippet.md) dans
-`~/.claude/CLAUDE.md` (valable pour tous tes projets), en adaptant le chemin de `lokman-visuals`.
+`~/.claude/CLAUDE.md` (valable pour tous tes projets), en adaptant le chemin du dossier du projet.
 C'est une consigne donnée à Claude, pas un automatisme garanti : s'il l'oublie, demande-lui
-« ouvre Lokman Visuals ». Elle ne fonctionne que dans une session locale de l'app de bureau :
+« ouvre LokTake ». Elle ne fonctionne que dans une session locale de l'app de bureau :
 une session cloud n'a pas accès au `localhost` de ton ordinateur.
 
 ## Architecture (choisie après inspection d'HyperFrames 0.8.229)
@@ -55,7 +55,7 @@ une session cloud n'a pas accès au `localhost` de ton ordinateur.
 |---|---|---|
 | Lecture | composant officiel **`<hyperframes-player>`** en mode vidéo (`type="video/mp4"`), repli automatique sur `<video>` | même API play/pause/seek/vitesse que le reste de l'écosystème HyperFrames, sans réimplémenter de lecteur |
 | Scènes / éléments | **`hyperframes timeline --json`** (analyse statique, sans navigateur) | donne l'`id`, la piste, le fichier source (`compositions/…`) et les instants de chaque clip : c'est ce qu'il faut pour dire à Claude *où* intervenir |
-| Coupes | **ffmpeg** (trim à l'image + concat), dans un **nouveau fichier** | HyperFrames n'a pas de coupe de MP4 ; et ses commandes `timeline split/delete` modifient le *code*, ce que Lokman ne fait jamais |
+| Coupes | **ffmpeg** (trim à l'image + concat), dans un **nouveau fichier** | HyperFrames n'a pas de coupe de MP4 ; et ses commandes `timeline split/delete` modifient le *code*, ce que LokTake ne fait jamais |
 | Serveur | Node.js sans framework (`node:http`), streaming HTTP Range | aucune dépendance en plus d'HyperFrames ; le déplacement dans la vidéo exige le Range |
 | Interface | HTML/CSS/JS modules, sans étape de build | se lance avec `npm start`, rien à compiler |
 
@@ -63,26 +63,52 @@ Le **studio HyperFrames** (`hyperframes preview`) n'est pas réutilisé comme ba
 modifie la composition HTML, alors que la revue porte ici sur le MP4 rendu, c'est-à-dire ce qui est livré.
 
 ```
-bin/lokman-visuals.js   lancement (CLI)
+bin/loktake.js          lancement (CLI) ; bin/lokman-visuals.js = alias de l'ancien nom
 server/                 index (routes), projects (projets + versions), annotations, cuts (coupes +
                         vérification), media (ffprobe/ffmpeg/Range), hf (CLI HyperFrames), store (JSON atomique)
 shared/                 logique pure partagée navigateur/serveur : temps, correspondance des coupes, export Claude
-web/                    interface (index.html, styles.css, js/app.js, js/timeline.js, js/player.js, js/api.js)
+web/                    interface (index.html, styles.css, js/…) ; web/assets/ = logo, favicon
 test/                   tests unitaires + d'intégration (npm test) et parcours complet Playwright (npm run e2e)
 ```
+
+## Identité visuelle
+
+![LokTake](web/assets/loktake-logo.svg)
+
+**LokTake** — *Lok* : la signature de Lokman ; *Take* : la prise, la version vidéo ; le signe :
+deux crochets encadrent une plage, le losange marque l'instant. « Le bon retour. À la bonne image. »
+
+| Rôle | Couleur |
+|---|---|
+| Encre — texte et lecteur | `#172522` |
+| Ivoire — fond de travail | `#F5F2E9` |
+| Pervenche — action et sélection | `#8AA8FF` |
+| Craie — panneaux | `#FFFEFA` |
+| Sauge — texte secondaire | `#5E6C66` |
+
+Typographies : **DejaVu Sans** (interface) et **DejaVu Sans Mono** (temps, versions, images),
+servies localement depuis le paquet `dejavu-fonts-ttf`. Grille de 8 px, rayons de 8 px ; les
+statuts ont toujours un mot et une icône (◆ À traiter, ! À vérifier, ✓ Validé).
+Fichiers du logo dans `web/assets/` : signe et logotype en versions claire, sombre et monochrome,
+favicon simplifié 16 px.
+
+**Ancien nom (Lokman Visuals)** : `bin/lokman-visuals.js` et les variables `LOKMAN_*` restent
+acceptés. Un projet déjà annoté garde son dossier `.lokman/`, lu tel quel ; pour passer au nouveau
+nom, renommez-le en `.loktake/` (serveur arrêté). Les MP4 montés de `renders/lokman-montages/` et
+leurs fiches `.lokman.json` restent reconnus ; les nouveaux vont dans `renders/loktake-montages/`.
 
 ## Données sur disque (dans chaque projet)
 
 ```
 mon-projet/
-  .lokman/
+  .loktake/
     annotations.json     toutes les annotations, toutes versions (à versionner avec git si tu veux)
     versions.json        registre des versions : fichier, empreinte, durée, i/s, scènes capturées
     edits/<version>.json brouillons de coupe avec historique annuler/rétablir
     settings.json        dernière version / position (reprise de session)
-    cache/               forme d'onde, vignettes, timeline (ignoré par .lokman/.gitignore)
+    cache/               forme d'onde, vignettes, timeline (ignoré par .loktake/.gitignore)
   renders/
-    lokman-montages/     MP4 montés + fiche <fichier>.lokman.json + images de raccords
+    loktake-montages/    MP4 montés + fiche <fichier>.loktake.json + images de raccords
 ```
 
 Exemple d'annotation :
@@ -154,7 +180,7 @@ avec la CLI 0.8.229 (et sur un projet témoin généré).
 - Effets prévus avant rendu, d'après la timeline : scène amputée en entrée/sortie, coupe au milieu
   d'une animation GSAP, transition entre scènes touchée, raccord proche d'une frontière, musique ou
   voix coupée en plein milieu.
-- **Générer le MP4 monté** : nouveau fichier dans `renders/lokman-montages/`, le rendu d'origine est
+- **Générer le MP4 monté** : nouveau fichier dans `renders/loktake-montages/`, le rendu d'origine est
   intact (vérifié par empreinte dans les tests). Rapport de vérification :
   nombre d'images et durée attendus, synchronisation audio/vidéo, **images de part et d'autre de chaque
   raccord comparées à la source** (aucune image perdue ni dupliquée), saut de niveau sonore au
@@ -163,7 +189,7 @@ avec la CLI 0.8.229 (et sur un projet témoin généré).
   n'efface que le fichier dérivé.
 
 **MP4 ≠ code source** : un montage est étiqueté « MP4 monté » partout (badge, liste des versions,
-bandeau, onglet, fiche `.lokman.json`, texte pour Claude). Le texte pour Claude précise qu'il n'a
+bandeau, onglet, fiche `.loktake.json`, texte pour Claude). Le texte pour Claude précise qu'il n'a
 **pas** modifié le code, et donne pour chaque retour l'instant équivalent dans le rendu d'origine.
 
 **Versions et report des annotations**
@@ -221,7 +247,7 @@ projet témoin est généré. `--shots DOSSIER` enregistre des captures.
 - **Scènes** : ce sont les clips que `hyperframes timeline --json` expose (premier niveau, et les
   enfants s'il y en a). Les éléments internes d'une sous-composition ne sont pas détaillés si la CLI
   ne les liste pas. Pour un rendu antérieur à la dernière modification du code, la correspondance est
-  marquée **incertaine** : Lokman ne conserve pas l'état du code au moment du rendu.
+  marquée **incertaine** : LokTake ne conserve pas l'état du code au moment du rendu.
 - **Report vers un nouveau rendu** : heuristique (même scène ciblée, ou même structure). Elle n'est
   jamais présentée comme certaine ; une confirmation manuelle reste nécessaire.
 - **Coupes** : ré-encodage H.264 (CRF 16, `preset medium`) et AAC 192 kb/s, donc pas sans perte ;

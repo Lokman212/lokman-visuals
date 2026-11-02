@@ -2,7 +2,9 @@
 // marqueurs d'annotations, sélection de plage et coupes.
 import { formatTime } from "/shared/format.js";
 
-const STATUS_COLOR = { a_traiter: "#dc4b36", a_verifier: "#e29b00", valide: "#2e9b5f" };
+const STATUS_COLOR = { a_traiter: "#6F8EF5", a_verifier: "#E0B341", valide: "#4FA97A" };
+// Pastille de légende de chaque piste (couleurs de la charte LokTake).
+const SWATCH = { film: "var(--encre)", visual: "var(--tk-visuel)", captions: "var(--tk-texte)", audio: "var(--tk-audio)", wave: "var(--tk-audio)", ann: "var(--tk-retour)", cut: "var(--tk-coupe)" };
 const H = { ruler: 24, film: 40, clip: 22, wave: 36, ann: 22, cut: 26 };
 
 export class Timeline {
@@ -71,7 +73,7 @@ export class Timeline {
   // ------------------------------------------------------------ rendu
   rows() {
     const rows = [{ key: "ruler", label: "", h: H.ruler }];
-    if (this.d.filmstrip) rows.push({ key: "film", label: "Images", h: H.film });
+    if (this.d.filmstrip) rows.push({ key: "film", label: "Images", sw: "film", h: H.film });
     // Une ligne par piste HyperFrames (clips de premier niveau).
     const groups = new Map();
     for (const c of this.d.clips.filter((c) => c.depth === 0)) {
@@ -86,12 +88,13 @@ export class Timeline {
     });
     for (const [k, clips] of sorted) {
       const name = clips.length === 1 ? clips[0].id : `piste ${clips[0].trackIndex ?? "?"}`;
-      rows.push({ key: `clips:${k}`, label: name, sub: clips[0].trackKind, h: H.clip, clips });
+      const kind = clips[0].trackKind === "audio" || clips[0].trackKind === "captions" ? clips[0].trackKind : "visual";
+      rows.push({ key: `clips:${k}`, label: name, sub: clips[0].trackKind, sw: kind, h: H.clip, clips });
     }
-    if (this.d.peaks?.count) rows.push({ key: "wave", label: "Audio (MP4)", h: H.wave });
+    if (this.d.peaks?.count) rows.push({ key: "wave", label: "Audio (MP4)", sw: "wave", h: H.wave });
     const lanes = this.annotationLanes();
-    rows.push({ key: "ann", label: "Retours", h: Math.max(28, lanes.n * H.ann + 6), lanes });
-    if (this.d.showCuts) rows.push({ key: "cut", label: this.d.isCutVersion ? "Raccords" : "Coupes MP4", h: H.cut });
+    rows.push({ key: "ann", label: "Retours", sw: "ann", h: Math.max(28, lanes.n * H.ann + 6), lanes });
+    if (this.d.showCuts) rows.push({ key: "cut", label: this.d.isCutVersion ? "Raccords" : "Coupes", sw: "cut", h: H.cut });
     return rows;
   }
 
@@ -115,7 +118,7 @@ export class Timeline {
     const W = Math.ceil(this.timeToX(this.d.duration));
     const rows = this.rows();
     this.labels.innerHTML = rows.map((r) =>
-      `<div class="tl-label" style="--h:${r.h}px" title="${esc(r.label + (r.sub ? " — piste " + r.sub : ""))}">${esc(r.label)}</div>`).join("");
+      `<div class="tl-label" style="--h:${r.h}px" title="${esc(r.label + (r.sub ? " — piste " + r.sub : ""))}">${r.sw ? `<i class="sw" style="--sw:${SWATCH[r.sw]}"></i>` : ""}<span class="nm">${esc(r.label)}</span></div>`).join("");
     const html = [];
     for (const r of rows) {
       if (r.key === "ruler") html.push(`<div class="tl-row ruler" style="--h:${r.h}px"><canvas data-c="ruler"></canvas></div>`);
@@ -208,8 +211,8 @@ export class Timeline {
     const steps = [1 / fps, 2 / fps, 5 / fps, 10 / fps, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
     const major = steps.find((s) => s * pps >= 90) ?? 600;
     const minor = major / (major < 1 && major * fps < 10 ? major * fps : 5);
-    g.font = "10.5px ui-monospace, Menlo, monospace";
-    g.fillStyle = "#4a463b"; g.strokeStyle = "#b9b099";
+    g.font = "11px 'DejaVu Sans Mono', Menlo, monospace";
+    g.fillStyle = "#5E6C66"; g.strokeStyle = "#C9C3B3";
     const per = Math.round(major / minor);
     const k0 = Math.floor(vl / pps / minor), k1 = Math.ceil((vl + vw) / pps / minor);
     for (let k = k0; k <= k1; k++) {
@@ -225,7 +228,7 @@ export class Timeline {
     const p = this.d.peaks; if (!p?.count) return;
     const pps = this.pps, mid = h / 2;
     const norm = 255 / Math.max(8, p.max ?? (p.max = Math.max(...p.peaks))); // affichage normalisé
-    g.fillStyle = "#3c6fd8";
+    g.fillStyle = "#4E9DBA";
     for (let x = 0; x < vw; x++) {
       const ta = (vl + x) / pps, tb = (vl + x + 1) / pps;
       if (ta > this.d.duration) break;
@@ -235,7 +238,7 @@ export class Timeline {
       g.fillRect(x, mid - a, 1, Math.max(1, a * 2));
     }
     for (const rm of this.d.removed) { // son supprimé grisé
-      g.fillStyle = "#dc4b3633";
+      g.fillStyle = "#EFA9C466";
       g.fillRect(rm.start * pps - vl, 0, (rm.end - rm.start) * pps, h);
     }
   }

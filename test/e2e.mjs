@@ -26,9 +26,9 @@ try { ({ chromium } = require("playwright")); } catch {
   ({ chromium } = createRequire(g + "/")("playwright"));
 }
 
-const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lokman-e2e-"));
+const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "loktake-e2e-"));
 const proj = path.join(tmp, srcProject ? path.basename(srcProject) : "fixture-hf");
-if (srcProject) await fs.cp(srcProject, proj, { recursive: true, preserveTimestamps: true, filter: (s) => !s.includes(`${path.sep}.lokman`) && !s.includes("node_modules") });
+if (srcProject) await fs.cp(srcProject, proj, { recursive: true, preserveTimestamps: true, filter: (s) => !s.includes(`${path.sep}.loktake`) && !s.includes(`${path.sep}.lokman`) && !s.includes("node_modules") });
 else await makeFixture(proj);
 
 const PORT = 18000 + Math.floor(Math.random() * 1000);
@@ -56,8 +56,8 @@ try {
   };
   watch(page);
   await page.goto(BASE);
-  await page.waitForFunction(() => window.__lokman?.player?.ready && window.__lokman.S.version, null, { timeout: 30000 });
-  const info = await page.evaluate(() => ({ kind: window.__lokman.player.kind, d: window.__lokman.player.duration, v: window.__lokman.S.version }));
+  await page.waitForFunction(() => window.__loktake?.player?.ready && window.__loktake.S.version, null, { timeout: 30000 });
+  const info = await page.evaluate(() => ({ kind: window.__loktake.player.kind, d: window.__loktake.player.duration, v: window.__loktake.S.version }));
   assert.ok(info.d > 1, "durée lue");
   ok(`lecteur ${info.kind}, ${info.d.toFixed(2)} s, ${info.v.media.frames} images, version ${info.v.file}`);
   const fps = info.v.media.fps;
@@ -68,28 +68,28 @@ try {
   await page.waitForTimeout(1200);
   await page.click("#playBtn");
   await page.waitForTimeout(300);
-  const t1 = await page.evaluate(() => window.__lokman.S.time);
-  const playerT = await page.evaluate(() => window.__lokman.player.currentTime);
-  const headX = await page.evaluate(() => parseFloat(window.__lokman.timeline.headEl.style.left));
-  const pps = await page.evaluate(() => window.__lokman.timeline.pps);
+  const t1 = await page.evaluate(() => window.__loktake.S.time);
+  const playerT = await page.evaluate(() => window.__loktake.player.currentTime);
+  const headX = await page.evaluate(() => parseFloat(window.__loktake.timeline.headEl.style.left));
+  const pps = await page.evaluate(() => window.__loktake.timeline.pps);
   assert.ok(t1 > 0.5, "la lecture avance");
   assert.ok(Math.abs(playerT - t1) < 1 / fps + 1e-3, "lecteur et état synchronisés");
   assert.ok(Math.abs(headX - t1 * pps) < 1.5, "tête de lecture de la timeline synchronisée");
   ok(`lecture puis pause à ${t1.toFixed(3)} s ; lecteur ${playerT.toFixed(3)} s ; tête timeline à ${headX.toFixed(1)} px (attendu ${(t1 * pps).toFixed(1)})`);
-  const f0 = await page.evaluate(() => Math.round(window.__lokman.S.time * window.__lokman.S.version.media.fps));
+  const f0 = await page.evaluate(() => Math.round(window.__loktake.S.time * window.__loktake.S.version.media.fps));
   await page.keyboard.press("ArrowRight"); await page.keyboard.press("ArrowRight");
-  const f1 = await page.evaluate(() => Math.round(window.__lokman.S.time * window.__lokman.S.version.media.fps));
+  const f1 = await page.evaluate(() => Math.round(window.__loktake.S.time * window.__loktake.S.version.media.fps));
   assert.equal(f1 - f0, 2, "pas image par image");
   ok(`→ → : image ${f0} → ${f1}`);
   await page.click('#speeds [data-rate="1.5"]');
-  assert.equal(await page.evaluate(() => window.__lokman.player.playbackRate), 1.5);
+  assert.equal(await page.evaluate(() => window.__loktake.player.playbackRate), 1.5);
   await page.click('#speeds [data-rate="1"]');
   ok("vitesse 1,5× appliquée au lecteur");
   await shot(page, "ouverture");
 
   // ------------------------------------------------------------------ 2. annoter
   step("Annotations : instant puis plage");
-  await page.evaluate(() => window.__lokman.seek(1.0));
+  await page.evaluate(() => window.__loktake.seek(1.0));
   await page.fill("#commentInput", "Le titre arrive trop tôt, décaler de 6 images.");
   await page.keyboard.press("Enter");
   await page.waitForSelector(".ann");
@@ -97,13 +97,13 @@ try {
   const lane = page.locator(".tl-row").filter({ has: page.locator(".marker") }).first();
   await lane.scrollIntoViewIfNeeded();
   const box = await lane.boundingBox();
-  const x = async (t) => box.x + t * (await page.evaluate(() => window.__lokman.timeline.pps)) - (await page.evaluate(() => window.__lokman.timeline.scroller.scrollLeft));
+  const x = async (t) => box.x + t * (await page.evaluate(() => window.__loktake.timeline.pps)) - (await page.evaluate(() => window.__loktake.timeline.scroller.scrollLeft));
   await page.mouse.move(await x(2.0), box.y + box.height - 4);
   await page.mouse.down();
   await page.mouse.move(await x(2.6), box.y + box.height - 4, { steps: 5 });
   await page.mouse.move(await x(3.5), box.y + box.height - 4, { steps: 5 });
   await page.mouse.up();
-  const sel = await page.evaluate(() => window.__lokman.S.selection);
+  const sel = await page.evaluate(() => window.__loktake.S.selection);
   assert.ok(sel && sel.end - sel.start > 1, "plage sélectionnée à la souris");
   ok(`plage sélectionnée ${sel.start.toFixed(3)} → ${sel.end.toFixed(3)} s`);
   await page.fill("#commentInput", "Transition molle sur ce passage : accélérer l'easing.");
@@ -112,7 +112,7 @@ try {
   // Statut
   await page.locator(".ann").first().locator("select.status-sel").selectOption("a_verifier");
   await page.waitForTimeout(300);
-  const disk = JSON.parse(await fs.readFile(path.join(proj, ".lokman", "annotations.json"), "utf8"));
+  const disk = JSON.parse(await fs.readFile(path.join(proj, ".loktake", "annotations.json"), "utf8"));
   assert.equal(disk.annotations.length, 2);
   const [aInst, aRange] = disk.annotations;
   for (const k of ["id", "projectId", "versionId", "comment", "status", "targets", "createdAt"]) assert.ok(k in aInst, `champ ${k}`);
@@ -132,17 +132,17 @@ try {
   page = await ctx.newPage();
   watch(page);
   await page.goto(BASE);
-  await page.waitForFunction(() => window.__lokman?.player?.ready && document.querySelectorAll(".ann").length === 2, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__loktake?.player?.ready && document.querySelectorAll(".ann").length === 2, null, { timeout: 30000 });
   ok("les 2 annotations sont rechargées depuis le disque");
   await page.locator(`.ann[data-id="${aRange.id}"] .ann-time`).click();
   await page.waitForTimeout(200);
-  const after = await page.evaluate(() => ({ t: window.__lokman.S.time, sel: window.__lokman.S.selection, p: window.__lokman.player.currentTime }));
+  const after = await page.evaluate(() => ({ t: window.__loktake.S.time, sel: window.__loktake.S.selection, p: window.__loktake.player.currentTime }));
   assert.ok(Math.abs(after.t - aRange.start) < 1e-6, "clic = retour au début de la plage");
   assert.ok(after.sel && Math.abs(after.sel.end - aRange.end) < 1e-6, "plage resélectionnée");
   ok(`clic sur ${aRange.id} → curseur ${after.t.toFixed(3)} s, lecteur ${after.p.toFixed(3)} s, plage resélectionnée`);
   await page.locator(`.marker[data-ann="${aInst.id}"]`).click();
   await page.waitForTimeout(200);
-  assert.ok(Math.abs((await page.evaluate(() => window.__lokman.S.time)) - aInst.time) < 1e-6);
+  assert.ok(Math.abs((await page.evaluate(() => window.__loktake.S.time)) - aInst.time) < 1e-6);
   ok(`clic sur le marqueur ${aInst.id} de la timeline → ${aInst.time.toFixed(3)} s`);
 
   // ------------------------------------------------------------------ 4. copier pour Claude + JSON
@@ -163,37 +163,37 @@ try {
   // ------------------------------------------------------------------ 5. coupes
   step("Coupes MP4 : scinder, supprimer, annuler, rétablir, générer");
   await page.click('.tabs [data-tab="montage"]');
-  await page.evaluate(() => window.__lokman.seek(6.0));
+  await page.evaluate(() => window.__loktake.seek(6.0));
   await page.keyboard.press("s");
-  await page.waitForFunction(() => window.__lokman.S.draft?.splits?.length === 1);
+  await page.waitForFunction(() => window.__loktake.S.draft?.splits?.length === 1);
   ok("scission à 6,00 s (aucun contenu supprimé)");
-  await page.evaluate(() => window.__lokman.seek(4.0));
+  await page.evaluate(() => window.__loktake.seek(4.0));
   await page.keyboard.press("i");
-  await page.evaluate(() => window.__lokman.seek(5.0 - 1 / window.__lokman.S.version.media.fps));
+  await page.evaluate(() => window.__loktake.seek(5.0 - 1 / window.__loktake.S.version.media.fps));
   await page.keyboard.press("o");
-  const cutSel = await page.evaluate(() => window.__lokman.S.selection);
+  const cutSel = await page.evaluate(() => window.__loktake.S.selection);
   await page.locator('[data-m="delete"]').click();
-  await page.waitForFunction(() => window.__lokman.S.draft?.removed?.length === 1);
-  const removed = await page.evaluate(() => window.__lokman.S.draft.removed[0]);
+  await page.waitForFunction(() => window.__loktake.S.draft?.removed?.length === 1);
+  const removed = await page.evaluate(() => window.__loktake.S.draft.removed[0]);
   ok(`I/O puis « Supprimer la sélection » : ${removed.start.toFixed(3)} → ${removed.end.toFixed(3)} s supprimé (sélection ${cutSel.start.toFixed(3)} → ${cutSel.end.toFixed(3)})`);
   await page.keyboard.press("Control+z");
-  await page.waitForFunction(() => window.__lokman.S.draft?.removed?.length === 0);
+  await page.waitForFunction(() => window.__loktake.S.draft?.removed?.length === 0);
   ok("Ctrl+Z : suppression annulée");
   await page.keyboard.press("Control+Shift+z");
-  await page.waitForFunction(() => window.__lokman.S.draft?.removed?.length === 1);
+  await page.waitForFunction(() => window.__loktake.S.draft?.removed?.length === 1);
   ok("Ctrl+Maj+Z : suppression rétablie");
-  const impacts = await page.evaluate(() => window.__lokman.S.draft.impacts);
+  const impacts = await page.evaluate(() => window.__loktake.S.draft.impacts);
   ok(`analyse avant rendu : ${impacts.length} effet(s) prévu(s) — ${impacts.map((i) => i.label).join(" | ")}`);
   // Aperçu : la lecture saute la plage supprimée.
-  await page.evaluate(() => window.__lokman.seek(3.6));
+  await page.evaluate(() => window.__loktake.seek(3.6));
   await page.click("#playBtn");
-  await page.waitForFunction(() => window.__lokman.S.time > 5.3, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__loktake.S.time > 5.3, null, { timeout: 5000 });
   await page.click("#playBtn");
   ok("aperçu : la lecture a sauté 4,00 → 5,00 s sans modifier le fichier");
   await shot(page, "montage-brouillon");
   // Un retour placé DANS le passage qui va être supprimé : il devra être signalé « à repositionner ».
   await page.click('.tabs [data-tab="retours"]');
-  await page.evaluate(() => { window.__lokman.seek(4.5); });
+  await page.evaluate(() => { window.__loktake.seek(4.5); });
   await page.keyboard.press("Escape");
   await page.fill("#commentInput", "Ce passage est en trop.");
   await page.keyboard.press("Enter");
@@ -201,16 +201,16 @@ try {
   await page.click('.tabs [data-tab="montage"]');
   const srcHashBefore = await sha(path.join(proj, info.v.file));
   await page.locator('[data-m="render"]').click();
-  await page.waitForFunction(() => window.__lokman.S.version?.kind === "cut", null, { timeout: 180000 });
+  await page.waitForFunction(() => window.__loktake.S.version?.kind === "cut", null, { timeout: 180000 });
   await page.waitForTimeout(500);
-  const cut = await page.evaluate(() => window.__lokman.S.version);
+  const cut = await page.evaluate(() => window.__loktake.S.version);
   assert.equal(await sha(path.join(proj, info.v.file)), srcHashBefore, "le rendu d'origine est intact");
   ok(`rendu d'origine inchangé (empreinte identique)`);
   ok(`nouveau MP4 monté : ${cut.file} · ${cut.media.duration.toFixed(3)} s · ${cut.media.frames} images`);
   for (const c of cut.report.checks) console.log(`    ${c.level === "ok" ? "✓" : c.level === "warn" ? "!" : "✗"} ${c.label} — ${c.detail}`);
   assert.ok(cut.report.ok, "vérification du montage sans erreur");
   assert.equal(cut.media.frames, info.v.media.frames - Math.round((removed.end - removed.start) * fps));
-  const anns = JSON.parse(await fs.readFile(path.join(proj, ".lokman", "annotations.json"), "utf8")).annotations;
+  const anns = JSON.parse(await fs.readFile(path.join(proj, ".loktake", "annotations.json"), "utf8")).annotations;
   const onCut = anns.filter((a) => a.versionId === cut.id);
   const onBase = anns.filter((a) => a.versionId === info.v.id);
   assert.equal(onBase.length, 3, "annotations d'origine conservées sur leur version");
@@ -241,8 +241,8 @@ try {
 // --------------------------------------------------------------------------------
 function startServer() {
   return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [path.join(ROOT, "bin/lokman-visuals.js"), tmp, "--port", String(PORT), "--no-open"], { stdio: ["ignore", "pipe", "inherit"] });
-    p.stdout.on("data", (d) => { if (String(d).includes("Lokman Visuals →")) resolve(p); });
+    const p = spawn(process.execPath, [path.join(ROOT, "bin/loktake.js"), tmp, "--port", String(PORT), "--no-open"], { stdio: ["ignore", "pipe", "inherit"] });
+    p.stdout.on("data", (d) => { if (String(d).includes("LokTake →")) resolve(p); });
     p.on("exit", (c) => reject(new Error(`serveur arrêté (${c})`)));
   });
 }

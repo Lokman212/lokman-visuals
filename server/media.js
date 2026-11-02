@@ -4,8 +4,8 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
-export const FFMPEG = process.env.LOKMAN_FFMPEG || "ffmpeg";
-export const FFPROBE = process.env.LOKMAN_FFPROBE || "ffprobe";
+export const FFMPEG = process.env.LOKTAKE_FFMPEG || process.env.LOKMAN_FFMPEG || "ffmpeg";
+export const FFPROBE = process.env.LOKTAKE_FFPROBE || process.env.LOKMAN_FFPROBE || "ffprobe";
 
 /** Lance un processus et renvoie stdout (Buffer). Rejette si code ≠ 0. */
 export function run(cmd, args, { cwd, timeout = 120000, onStderr } = {}) {

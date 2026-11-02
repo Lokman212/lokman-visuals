@@ -1,12 +1,26 @@
-// Stockage JSON sur disque, dans le dossier `.lokman/` de chaque projet.
+// Stockage JSON sur disque, dans le dossier `.loktake/` de chaque projet (`.lokman/` pour les anciens).
 // Écriture atomique (fichier temporaire + rename) et sérialisation par fichier.
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
-export const LOKMAN_DIR = ".lokman";
+export const LOKTAKE_DIR = ".loktake";
+/** Dossier de données de l'ancien nom (Lokman Visuals). */
+export const LEGACY_DIR = ".lokman";
 
-export function lokmanPath(projectDir, ...parts) {
-  return path.join(projectDir, LOKMAN_DIR, ...parts);
+// Un projet déjà annoté sous l'ancien nom garde son dossier `.lokman/`, utilisé tel quel
+// (rien n'est déplacé) ; un projet neuf, ou déjà renommé à la main, utilise `.loktake/`.
+const dataDirs = new Map();
+export function dataDirName(projectDir) {
+  let name = dataDirs.get(projectDir);
+  if (!name) {
+    name = !existsSync(path.join(projectDir, LOKTAKE_DIR)) && existsSync(path.join(projectDir, LEGACY_DIR)) ? LEGACY_DIR : LOKTAKE_DIR;
+    dataDirs.set(projectDir, name);
+  }
+  return name;
+}
+export function loktakePath(projectDir, ...parts) {
+  return path.join(projectDir, dataDirName(projectDir), ...parts);
 }
 
 export async function readJson(file, fallback) {
@@ -18,7 +32,7 @@ export async function readJson(file, fallback) {
       // Fichier corrompu : on le met de côté plutôt que de l'écraser.
       const aside = `${file}.corrompu-${Date.now()}`;
       await fs.rename(file, aside).catch(() => {});
-      console.warn(`[lokman] ${file} illisible, déplacé vers ${aside}`);
+      console.warn(`[loktake] ${file} illisible, déplacé vers ${aside}`);
       return structuredClone(fallback);
     }
     throw e;
@@ -55,7 +69,7 @@ export function updateJson(file, fallback, mutate) {
 
 export async function ensureGitignore(projectDir) {
   // Le cache (forme d'onde, vignettes) n'a pas à être versionné ; les annotations oui.
-  const gi = lokmanPath(projectDir, ".gitignore");
+  const gi = loktakePath(projectDir, ".gitignore");
   try { await fs.access(gi); } catch {
     await fs.mkdir(path.dirname(gi), { recursive: true });
     await fs.writeFile(gi, "cache/\n*.tmp\nsettings.json\n");

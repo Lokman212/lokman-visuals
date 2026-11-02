@@ -1,10 +1,10 @@
 // Coupes appliquées au MP4 (montage). Ne touche JAMAIS au code source HyperFrames :
-// on produit un nouveau fichier dans renders/lokman-montages/, le rendu d'origine est intact.
+// on produit un nouveau fichier dans renders/loktake-montages/, le rendu d'origine est intact.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { FFMPEG, run, probe, decodeAudio, rmsDb, grabFramesGray, meanAbsDiff, frameStrip } from "./media.js";
-import { lokmanPath, readJson, updateJson, writeJson } from "./store.js";
-import { MONTAGE_DIR, deriveCutTimeline, fingerprint, registerVersion, slug } from "./projects.js";
+import { loktakePath, readJson, updateJson, writeJson } from "./store.js";
+import { MONTAGE_DIR, SIDECAR_EXT, LEGACY_SIDECAR_EXT, deriveCutTimeline, fingerprint, registerVersion, slug } from "./projects.js";
 import { keptSegments, normalizeEdl, removedTotal } from "../shared/timemap.js";
 import { formatTime } from "../shared/format.js";
 
@@ -13,7 +13,7 @@ const EPS = 1e-6;
 
 // ---------------------------------------------------------------- brouillon (EDL) avec annuler/rétablir
 
-const draftFile = (project, baseId) => lokmanPath(project.path, "edits", `${baseId}.json`);
+const draftFile = (project, baseId) => loktakePath(project.path, "edits", `${baseId}.json`);
 const emptyDraft = (baseId) => ({ schema: 1, baseVersionId: baseId, removed: [], splits: [], past: [], future: [] });
 
 export function readDraft(project, base) {
@@ -134,9 +134,9 @@ export async function renderMontage(project, base, edlInput, onProgress = () => 
     missing: false,
   };
   if (base.timeline && !base.timeline.error) version.timeline = deriveCutTimeline(base, version);
-  // Fiche à côté du MP4 : le montage reste identifiable même si `.lokman/` est perdu.
-  await writeJson(`${outAbs}.lokman.json`, {
-    kind: "cut", tool: "Lokman Visuals", note: "MP4 monté : le code source HyperFrames n'a pas été modifié.",
+  // Fiche à côté du MP4 : le montage reste identifiable même si `.loktake/` est perdu.
+  await writeJson(`${outAbs}${SIDECAR_EXT}`, {
+    kind: "cut", tool: "LokTake", note: "MP4 monté : le code source HyperFrames n'a pas été modifié.",
     derivedFrom: base.id, baseFile: base.file, edl, report, createdAt: version.registeredAt,
   });
   await registerVersion(project, version);
@@ -289,6 +289,7 @@ const fin = (x) => (Number.isFinite(x) ? x : -120);
 export async function deleteMontageFiles(project, version) {
   const abs = path.join(project.path, version.file);
   await fs.rm(abs, { force: true });
-  await fs.rm(`${abs}.lokman.json`, { force: true });
+  await fs.rm(`${abs}${SIDECAR_EXT}`, { force: true });
+  await fs.rm(`${abs}${LEGACY_SIDECAR_EXT}`, { force: true });
   await fs.rm(abs.replace(/\.mp4$/, ".raccords"), { recursive: true, force: true });
 }

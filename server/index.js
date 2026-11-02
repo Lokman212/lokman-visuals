@@ -1,14 +1,14 @@
-// Serveur HTTP local de Lokman Visuals (aucune dépendance externe).
+// Serveur HTTP local de LokTake (aucune dépendance externe).
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { discoverProjects, readRegistry, scanVersions, refreshTimeline, removeVersion, MONTAGE_DIR } from "./projects.js";
+import { discoverProjects, readRegistry, scanVersions, refreshTimeline, removeVersion, MONTAGE_DIR, LEGACY_MONTAGE_DIR } from "./projects.js";
 import { listAnnotations, createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation, carryAnnotations, httpError } from "./annotations.js";
 import { readDraft, applyDraftOp, renderMontage, deleteMontageFiles, analyseImpacts } from "./cuts.js";
 import { computePeaks, makeFilmstrip, serveFileRange } from "./media.js";
-import { lokmanPath, readJson, writeJson } from "./store.js";
+import { loktakePath, readJson, writeJson } from "./store.js";
 import { hyperframesVersion } from "./hf.js";
 import { normalizeEdl } from "../shared/timemap.js";
 
@@ -16,7 +16,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".json": "application/json", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".png": "image/png", ".map": "application/json",
-  ".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime" };
+  ".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".ttf": "font/ttf" };
+// Polices de la charte LokTake (DejaVu Sans / DejaVu Sans Mono), servies localement.
+const FONTS = new Set(["DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf", "DejaVuSansMono-Bold.ttf"]);
 
 export function createServer({ roots }) {
   let projects = [];
@@ -44,14 +46,14 @@ export function createServer({ roots }) {
 
   // ------------------------------------------------------------ projets & versions
   route("GET", "/api/state", async () => ({
-    roots, hyperframesVersion: hyperframesVersion(), app: "Lokman Visuals 0.1.0",
+    roots, hyperframesVersion: hyperframesVersion(), app: "LokTake 0.2.0",
     projects: await Promise.all((await refreshProjects()).map(async (p) => {
       const reg = await readRegistry(p.path);
       return { ...p, versionsKnown: reg.versions.filter((v) => !v.missing).length };
     })),
   }));
 
-  // Ajoute un dossier à surveiller (utilisé par `lokman-visuals --background`).
+  // Ajoute un dossier à surveiller (utilisé par `loktake --background`).
   route("POST", "/api/roots", async (_p, body) => {
     const dir = path.resolve(String(body?.path ?? ""));
     const st = await fs.stat(dir).catch(() => null);
@@ -63,13 +65,13 @@ export function createServer({ roots }) {
   route("GET", "/api/projects/:pid", async ({ pid }) => {
     const project = getProject(pid);
     const versions = await scanVersions(project);
-    const settings = await readJson(lokmanPath(project.path, "settings.json"), {});
+    const settings = await readJson(loktakePath(project.path, "settings.json"), {});
     return { project, versions, settings };
   });
 
   const saveSettings = async ({ pid }, body) => {
     const project = getProject(pid);
-    const file = lokmanPath(project.path, "settings.json");
+    const file = loktakePath(project.path, "settings.json");
     const cur = await readJson(file, {});
     const next = { ...cur, ...pick(body, ["lastVersionId", "lastTime", "zoom", "knownVersionIds"]) };
     await writeJson(file, next);
@@ -85,7 +87,7 @@ export function createServer({ roots }) {
   route("DELETE", "/api/projects/:pid/versions/:vid", async ({ pid, vid }) => {
     const project = getProject(pid);
     const v = await getVersion(project, vid);
-    if (v.kind !== "cut") throw httpError(400, "Seuls les MP4 montés par Lokman Visuals peuvent être supprimés ici (un rendu HyperFrames n'est jamais supprimé).");
+    if (v.kind !== "cut") throw httpError(400, "Seuls les MP4 montés par LokTake peuvent être supprimés ici (un rendu HyperFrames n'est jamais supprimé).");
     await deleteMontageFiles(project, v);
     await removeVersion(project, vid);
     return { ok: true };
@@ -104,7 +106,7 @@ export function createServer({ roots }) {
     const project = getProject(pid);
     const v = await getVersion(project, vid);
     if (!v.media?.hasAudio) return { count: 0, peaks: [], duration: v.media?.duration ?? 0 };
-    const cache = lokmanPath(project.path, "cache", `peaks-${v.fingerprint.hash}.json`);
+    const cache = loktakePath(project.path, "cache", `peaks-${v.fingerprint.hash}.json`);
     let data = await readJson(cache, null);
     if (!data) { data = await computePeaks(safeJoin(project.path, v.file), v.media.duration); await writeJson(cache, data); }
     return data;
@@ -113,7 +115,7 @@ export function createServer({ roots }) {
   route("GET", "/api/projects/:pid/versions/:vid/filmstrip", async ({ pid, vid }, _b, req, res) => {
     const project = getProject(pid);
     const v = await getVersion(project, vid);
-    const img = lokmanPath(project.path, "cache", `filmstrip-${v.fingerprint.hash}.jpg`);
+    const img = loktakePath(project.path, "cache", `filmstrip-${v.fingerprint.hash}.jpg`);
     const meta = `${img}.json`;
     let info = await readJson(meta, null);
     if (!info) { info = await makeFilmstrip(safeJoin(project.path, v.file), v.media.duration, img); await writeJson(meta, info); }
@@ -127,7 +129,8 @@ export function createServer({ roots }) {
   route("GET", "/api/projects/:pid/montage-file", async ({ pid }, _b, req, res) => {
     const project = getProject(pid);
     const rel = new URL(req.url, "http://x").searchParams.get("path") ?? "";
-    if (!rel.startsWith(MONTAGE_DIR.split(path.sep).join("/") + "/") || !rel.endsWith(".jpg")) throw httpError(403, "chemin refusé");
+    const allowed = [MONTAGE_DIR, LEGACY_MONTAGE_DIR].map((d) => d.split(path.sep).join("/") + "/");
+    if (!allowed.some((d) => rel.startsWith(d)) || !rel.endsWith(".jpg")) throw httpError(403, "chemin refusé");
     res.writeHead(200, { "Content-Type": "image/jpeg" });
     res.end(await fs.readFile(safeJoin(project.path, rel)));
     return NO_BODY;
@@ -240,6 +243,10 @@ async function serveStatic(pathname, req, res) {
   else if (pathname.startsWith("/vendor/player/")) {
     // Composant officiel <hyperframes-player> (ESM + son chunk).
     file = safeJoin(path.dirname(require.resolve("@hyperframes/player")), pathname.slice(15));
+  } else if (pathname.startsWith("/vendor/fonts/")) {
+    const name = pathname.slice(14);
+    if (!FONTS.has(name)) throw httpError(404, "police introuvable");
+    file = path.join(path.dirname(require.resolve("dejavu-fonts-ttf/package.json")), "ttf", name);
   } else file = safeJoin(path.join(ROOT, "web"), pathname.slice(1));
   try {
     const data = await fs.readFile(file);

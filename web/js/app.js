@@ -1,4 +1,4 @@
-// Lokman Visuals — application principale.
+// LokTake — application principale.
 import { api } from "./api.js";
 import { Player } from "./player.js";
 import { Timeline } from "./timeline.js";
@@ -8,7 +8,13 @@ import { buildClaudeText } from "/shared/claude-export.js";
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const STATUS_COLOR = { a_traiter: "#dc4b36", a_verifier: "#e29b00", valide: "#2e9b5f" };
+// Statut = un mot + une icône + une couleur (jamais la couleur seule).
+const STATUS_STYLE = {
+  a_traiter: { c: "#3554C7", bg: "#E6ECFF", icon: "◆" },
+  a_verifier: { c: "#8A5D00", bg: "#F6EBCB", icon: "!" },
+  valide: { c: "#1F7A4D", bg: "#DCEFE3", icon: "✓" },
+};
+const statusText = (id) => `${STATUS_STYLE[id]?.icon ?? ""} ${statusLabel(id)}`.trim();
 
 const S = {
   appState: null, project: null, versions: [], version: null, annotations: [], draft: null,
@@ -42,14 +48,14 @@ async function init() {
   }
   sel.innerHTML = S.appState.projects.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
   const h = parseHash();
-  const pid = (h.pid && S.appState.projects.some((p) => p.id === h.pid)) ? h.pid : (lsGet("lv:lastProject") ?? S.appState.projects[0].id);
+  const pid = (h.pid && S.appState.projects.some((p) => p.id === h.pid)) ? h.pid : (lsGet("lt:lastProject") ?? lsGet("lv:lastProject") ?? S.appState.projects[0].id);
   await openProject(S.appState.projects.some((p) => p.id === pid) ? pid : S.appState.projects[0].id, h);
   setInterval(pollVersions, 5000);
 }
 
 async function openProject(pid, hint = {}) {
   $("#projectSelect").value = pid;
-  lsSet("lv:lastProject", pid);
+  lsSet("lt:lastProject", pid);
   const data = await api.project(pid);
   S.project = data.project;
   S.settings = data.settings ?? {};
@@ -70,7 +76,7 @@ async function openProject(pid, hint = {}) {
     player.destroy();
     let empty = $("#screenEmpty");
     if (!empty) { empty = Object.assign(document.createElement("div"), { id: "screenEmpty", className: "screen-empty" }); $("#screen").appendChild(empty); }
-    empty.textContent = "Aucun rendu MP4 dans ce projet. Lance « npx hyperframes render » puis « Actualiser ».";
+    empty.textContent = "Aucun rendu MP4 dans ce projet. Lancez « npx hyperframes render », puis « Actualiser ».";
     renderVersionSelect(); renderAll();
   }
 }
@@ -204,8 +210,8 @@ function renderAll() {
 function versionLabel(v) {
   const n = S.versions.filter((x) => x.kind === "render").indexOf(v) + 1;
   const name = v.file.split("/").pop();
-  if (v.kind === "cut") return `✂ ${name}`;
-  return `v${n} · ${name}`;
+  if (v.kind === "cut") return `Montage · ${name}`;
+  return `Version ${String(n).padStart(2, "0")} · ${name}`;
 }
 
 function renderVersionSelect() {
@@ -223,7 +229,7 @@ function renderHeaderBadge() {
   const b = $("#versionBadge"), v = S.version;
   if (!v) { b.textContent = ""; b.className = "vbadge"; return; }
   b.className = `vbadge ${v.kind}`;
-  b.textContent = v.kind === "cut" ? `MP4 monté · ${v.file.split("/").pop()}` : `Rendu HyperFrames · ${v.file}`;
+  b.textContent = v.kind === "cut" ? `MP4 monté / ${v.file.split("/").pop()}` : `Rendu original / ${v.file}`;
   b.title = v.file;
 }
 
@@ -231,8 +237,8 @@ function renderHint() {
   const v = S.version;
   if (!v) { $("#hint").innerHTML = ""; return; }
   const m = v.media;
-  $("#hint").innerHTML = `prêt · ${formatTime(m.duration).replace(/\.\d+$/, "")} · ${m.frames} images · ${m.width}×${m.height} · ${m.fps} i/s${m.hasAudio ? " · son" : " · muet"} · lecteur ${player.kind === "hyperframes" ? "HyperFrames" : "natif"}
-    · <b>Espace</b> lecture · <b>←→</b> image par image · <b>I/O</b> plage · <b>↑</b> ajouter un retour`;
+  $("#hint").innerHTML = `${formatTime(m.duration).replace(/\.\d+$/, "")} · ${m.frames} images · ${m.width}×${m.height} · ${m.fps} i/s${m.hasAudio ? " · son" : " · muet"} · lecteur ${player.kind === "hyperframes" ? "HyperFrames" : "natif"}
+    — <b>Espace</b> lecture · <b>←→</b> image par image · <b>I/O</b> plage · <b>↑</b> ajouter un retour`;
 }
 
 function renderBanners() {
@@ -304,7 +310,9 @@ function setSelection(sel) {
 }
 function renderSelectionInfo() {
   const s = S.selection;
-  $("#selInfo").textContent = s ? `Sélection ${formatTime(s.start)} → ${formatTime(s.end)} · ${(s.end - s.start).toFixed(2)} s (${Math.round((s.end - s.start) * fps())} img)` : "Glisser pour sélectionner une plage · double-clic sur une scène";
+  const el = $("#selInfo");
+  el.classList.toggle("idle", !s);
+  el.textContent = s ? `/ Sélection active  ${formatTime(s.start)} – ${formatTime(s.end)} · ${(s.end - s.start).toFixed(2)} s · ${Math.round((s.end - s.start) * fps())} img` : "Glissez pour sélectionner une plage · double-clic sur une scène";
 }
 function renderScrubSel() {
   const el = $("#scrubSel"), s = S.selection, d = duration();
@@ -329,15 +337,16 @@ function currentTargets() {
 function renderComposerTarget() {
   const t = currentTarget();
   const el = $("#targetLabel");
-  el.className = `target-pill ${t.kind === "range" ? "range" : ""}`;
-  el.textContent = t.kind === "range" ? `Plage ${formatTime(t.start)} → ${formatTime(t.end)}` : `Instant ${formatTimecode(t.time, fps())}`;
+  el.className = `target-label ${t.kind === "range" ? "range" : ""}`;
+  el.textContent = t.kind === "range" ? `${formatTime(t.start)} – ${formatTime(t.end)}` : formatTimecode(t.time, fps());
+  el.title = t.kind === "range" ? "Le retour portera sur la plage sélectionnée" : "Le retour portera sur l'image au curseur";
   $("#clearSel").style.visibility = S.selection ? "visible" : "hidden";
   const clips = currentTargets();
   const key = clips.map((c) => c.id).join("|");
   if (key !== renderComposerTarget.last) {
     renderComposerTarget.last = key;
     $("#targetChips").innerHTML = clips.map((c) =>
-      `<button class="chip ${isTargetOn(c) ? "on" : "off"}" data-target="${esc(c.id)}" title="${esc(c.sourceFile ?? "")} — clic pour inclure/exclure">${esc(c.id)}</button>`).join("");
+      `<button class="chip ${isTargetOn(c) ? "on" : "off"}" data-target="${esc(c.id)}" aria-pressed="${isTargetOn(c)}" title="${esc(c.sourceFile ?? "")} — cliquer pour inclure ou exclure">${esc(c.id)}</button>`).join("");
     timeline.content.querySelectorAll(".clip").forEach((el) => el.classList.toggle("hot", clips.some((c) => el.dataset.uid === c.uid && isTargetOn(c))));
   }
 }
@@ -380,7 +389,7 @@ function renderAnnotations() {
   $("#annCount").textContent = mine.filter((a) => a.status !== "valide").length || "";
   document.querySelectorAll("#statusFilter button").forEach((b) => b.classList.toggle("on", b.dataset.f === S.statusFilter));
   if (!list.length) {
-    $("#annList").innerHTML = `<li class="ann-empty">${mine.length ? "Aucun retour pour ce filtre." : "Aucun retour sur cette version.<br>Place le curseur ou sélectionne une plage, puis écris ton retour."}</li>`;
+    $("#annList").innerHTML = `<li class="ann-empty">${mine.length ? "Aucun retour pour ce filtre." : "Aucun retour sur cette version.<br>Regardez. Repérez. Précisez : placez le curseur ou sélectionnez une plage, puis écrivez votre retour."}</li>`;
     return;
   }
   const verFile = (id) => S.versions.find((v) => v.id === id);
@@ -388,18 +397,20 @@ function renderAnnotations() {
     const other = a.versionId !== S.version?.id;
     const ov = verFile(a.versionId);
     const f = a.fps ?? fps();
-    return `<li class="ann ${a.id === S.selectedAnnId ? "sel" : ""} ${other ? "other" : ""}" data-id="${a.id}" style="--c:${STATUS_COLOR[a.status]}">
+    const st = STATUS_STYLE[a.status] ?? STATUS_STYLE.a_traiter;
+    const sources = [...new Set((a.targets ?? []).map((t) => t.sourceFile).filter(Boolean))];
+    return `<li class="ann ${a.id === S.selectedAnnId ? "sel" : ""} ${other ? "other" : ""}" data-id="${a.id}">
       <div class="ann-head">
-        <button class="ann-time" data-act="goto" title="Aller au passage">${esc(formatAnnotationTime(a, f))}</button>
         <span class="ann-id">${a.id}</span>
+        <button class="ann-time" data-act="goto" title="Aller au passage">${esc(formatAnnotationTime(a, f))}</button>
         ${other ? `<span class="ann-ver" title="${esc(a.versionFile)}">${esc(ov ? versionLabel(ov) : a.versionFile)}</span>` : ""}
-        <select class="status-sel" data-act="status" style="--c:${STATUS_COLOR[a.status]}" aria-label="Statut">
-          ${STATUSES.map((s) => `<option value="${s.id}" ${s.id === a.status ? "selected" : ""}>${s.label}</option>`).join("")}
+        <select class="status-sel" data-act="status" style="--c:${st.c};--cb:${st.bg}" aria-label="Statut">
+          ${STATUSES.map((s) => `<option value="${s.id}" ${s.id === a.status ? "selected" : ""}>${statusText(s.id)}</option>`).join("")}
         </select>
       </div>
       <div class="ann-text" data-role="text">${esc(a.comment)}</div>
-      ${a.targets?.length ? `<div class="ann-meta">${a.targets.map((t) => `<span class="chip" title="${esc(t.sourceFile ?? "")}">${esc(t.id)}</span>`).join("")}</div>` : ""}
-      ${a.needsReposition ? `<div class="ann-warn">⚠ À repositionner — ${esc(a.mapping?.reason ?? "correspondance incertaine")}
+      ${a.targets?.length ? `<div class="ann-meta"><span>${a.targets.length > 1 ? "Scènes" : "Scène"} : ${a.targets.map((t) => esc(t.id)).join(", ")}</span>${sources.length ? `<span class="src" title="${esc(sources.join("\n"))}">Source : ${sources.map(esc).join(", ")}</span>` : ""}</div>` : ""}
+      ${a.needsReposition ? `<div class="ann-warn"><b>! À repositionner</b> — ${esc(a.mapping?.reason ?? "correspondance incertaine")}
         ${other ? "" : `<div class="row"><button class="btn small" data-act="confirm">Position OK</button><button class="btn small" data-act="place">Placer au curseur${S.selection ? " (sélection)" : ""}</button></div>`}</div>` : ""}
       ${a.origin ? `<div class="ann-origin">Reporté de ${esc(a.origin.annotationId)} (${esc(a.origin.versionFile ?? "")}) · correspondance ${esc(a.mapping?.confidence ?? "?")}</div>` : ""}
       ${a.carriedTo?.length ? `<div class="ann-origin">Reporté vers ${a.carriedTo.map((c) => esc(c.annotationId)).join(", ")}</div>` : ""}
@@ -511,7 +522,7 @@ async function copyForClaude() {
   if (!S.version) return;
   const { text, count } = claudeText();
   const ok = await copyText(text);
-  toast(ok ? `Copié pour Claude : ${count} demande(s) à traiter` : "Copie bloquée par le navigateur — texte affiché", { action: "Voir le texte", onAction: () => showText(text) });
+  toast(ok ? `Copié pour Claude : ${count} demande(s) à traiter` : "Copie bloquée par le navigateur — texte affiché à la place", { action: "Voir le texte", onAction: () => showText(text) });
   if (!ok) showText(text);
 }
 
@@ -526,16 +537,16 @@ async function copyText(text) {
 
 function showText(text) {
   const d = $("#dialog");
-  d.innerHTML = `<div class="dlg"><h3>Texte pour Claude Code</h3><pre id="dlgText">${esc(text)}</pre>
+  d.innerHTML = `<div class="dlg"><h3>Texte à coller dans Claude Code</h3><pre id="dlgText">${esc(text)}</pre>
     <div class="row"><button class="btn" data-close>Fermer</button><button class="btn primary" id="dlgCopy">Copier</button></div></div>`;
   d.querySelector("[data-close]").onclick = () => d.close();
-  d.querySelector("#dlgCopy").onclick = async () => { toast((await copyText(text)) ? "Copié" : "Sélectionne le texte et copie-le manuellement"); };
+  d.querySelector("#dlgCopy").onclick = async () => { toast((await copyText(text)) ? "Copié" : "Sélectionnez le texte et copiez-le manuellement"); };
   d.showModal();
 }
 
 function exportJson() {
   const data = {
-    schema: "lokman-visuals/annotations@1",
+    schema: "loktake/annotations@1",
     exportedAt: new Date().toISOString(),
     project: { id: S.project.id, name: S.project.name, path: S.project.path },
     currentVersionId: S.version?.id ?? null,
@@ -568,8 +579,8 @@ function renderMontage() {
   const segUnderCursor = segmentAtCursor();
   const canDelete = Boolean(S.selection || segUnderCursor);
   el.innerHTML = `<div class="montage">
-    <div class="notice">Les coupes produisent un <b>nouveau fichier MP4</b> dans <code>renders/lokman-montages/</code>.
-      Le rendu d'origine et le <b>code source HyperFrames ne sont pas modifiés</b>. Pour rendre une coupe définitive, transmets-la à Claude (« Copier pour Claude »).</div>
+    <div class="notice">Les coupes produisent un <b>nouveau fichier MP4</b> dans <code>renders/loktake-montages/</code>.
+      Le rendu d'origine et le <b>code source HyperFrames ne sont pas modifiés</b>. Pour rendre une coupe définitive, transmettez-la à Claude (« Copier pour Claude »).</div>
     <div class="mrow">
       <button class="btn" data-m="split" title="S">Scinder au curseur</button>
       <button class="btn" data-m="delete" ${canDelete ? "" : "disabled"} title="Suppr">Supprimer ${S.selection ? "la sélection" : segUnderCursor ? "le segment" : "la sélection"} et raccorder</button>
@@ -587,7 +598,7 @@ function renderMontage() {
       ${d.splits.map((s) => `<li class="${S.selectedCut?.type === "split" && Math.abs(S.selectedCut.t - s) < 1e-6 ? "sel" : ""}"><span class="dot" style="background:var(--blue)"></span>
         <span>Scission à <span class="t">${formatTime(s)}</span> <small>· rien n'est supprimé</small></span><span class="spacer"></span>
         <button class="btn small" data-m="goto" data-t="${s}">Voir</button><button class="btn small" data-m="unsplit" data-t="${s}">Retirer</button></li>`).join("")}
-    </ul>` : `<p class="ann-empty" style="padding:8px">Aucune coupe. Sélectionne une plage (glisser sur la timeline, ou <b>I</b>/<b>O</b>), ou scinde au curseur puis supprime un segment.</p>`}
+    </ul>` : `<p class="ann-empty" style="padding:8px">Aucune coupe. Sélectionnez une plage (glisser sur la timeline, ou <b>I</b>/<b>O</b>), ou scindez au curseur puis supprimez un segment.</p>`}
     <div class="msum"><span>Durée d'origine</span><b>${dur.toFixed(2)} s</b><span>Après coupe</span><b>${resDur.toFixed(2)} s</b><span>Segments conservés</span><b>${kept.length}</b></div>
     ${d.impacts?.length ? `<h4>Effets prévus (d'après la timeline HyperFrames)</h4>${checksList(d.impacts)}` : ""}
     <button class="btn primary" data-m="render" ${d.removed.length && !S.job ? "" : "disabled"}>Générer le MP4 monté</button>
@@ -667,7 +678,7 @@ async function onMontageClick(e) {
 
 function deleteSelectionCut() {
   const r = S.selection ?? segmentAtCursor();
-  if (!r) { toast("Sélectionne d'abord une plage (glisser sur la timeline, ou I puis O)."); return; }
+  if (!r) { toast("Sélectionnez d'abord une plage (glisser sur la timeline, ou I puis O)."); return; }
   if (r.end - r.start >= duration() - 1e-6) { toast("Impossible de supprimer tout le film.", { error: true }); return; }
   return montageOp({ type: "delete", start: r.start, end: r.end });
 }
@@ -697,7 +708,7 @@ async function startRender() {
 
 function setTab(tab) {
   S.tab = tab;
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll(".tabs button").forEach((b) => { b.classList.toggle("on", b.dataset.tab === tab); b.setAttribute("aria-selected", String(b.dataset.tab === tab)); });
   $("#panel-retours").classList.toggle("hidden", tab !== "retours");
   $("#panel-montage").classList.toggle("hidden", tab !== "montage");
   updateTimeline();
@@ -727,7 +738,7 @@ function bindUi() {
     document.querySelectorAll("#speeds button").forEach((x) => x.classList.toggle("on", x === b));
   };
   $("#fullscreenBtn").onclick = toggleFullscreen;
-  $("#loopBtn").onclick = () => { S.loop = !S.loop; $("#loopBtn").classList.toggle("on", S.loop); if (S.loop && !S.selection) toast("Boucle : sélectionne une plage à lire en boucle."); };
+  $("#loopBtn").onclick = () => { S.loop = !S.loop; $("#loopBtn").classList.toggle("on", S.loop); $("#loopBtn").setAttribute("aria-pressed", String(S.loop)); if (S.loop && !S.selection) toast("Boucle : sélectionnez une plage à lire en boucle."); };
   const scrub = $("#scrub");
   scrub.addEventListener("pointerdown", (e) => {
     const at = (ev) => { const r = scrub.getBoundingClientRect(); seek(((ev.clientX - r.left) / r.width) * duration()); };
@@ -836,5 +847,5 @@ function toast(msg, { error = false, action, onAction } = {}) {
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
 
-window.__lokman = { S, player, timeline, seek }; // utile au débogage et aux tests
+window.__loktake = { S, player, timeline, seek }; // utile au débogage et aux tests
 init().catch((e) => { console.error(e); toast(e.message, { error: true }); });

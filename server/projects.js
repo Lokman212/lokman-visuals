@@ -4,12 +4,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { readTimeline, hyperframesVersion } from "./hf.js";
 import { probe } from "./media.js";
-import { ensureGitignore, lokmanPath, readJson, updateJson, withLock, writeJson } from "./store.js";
+import { ensureGitignore, loktakePath, readJson, updateJson, withLock, writeJson } from "./store.js";
 import { mapClipsThroughCut } from "../shared/timemap.js";
 
-export const MONTAGE_DIR = path.join("renders", "lokman-montages");
+export const MONTAGE_DIR = path.join("renders", "loktake-montages");
+/** Montages produits sous l'ancien nom : toujours lus, plus jamais écrits. */
+export const LEGACY_MONTAGE_DIR = path.join("renders", "lokman-montages");
+/** Fiche posée à côté d'un MP4 monté (l'ancienne extension reste lue). */
+export const SIDECAR_EXT = ".loktake.json";
+export const LEGACY_SIDECAR_EXT = ".lokman.json";
 const VIDEO_EXT = new Set([".mp4", ".m4v", ".webm", ".mov"]);
-const SKIP_DIRS = new Set(["node_modules", ".git", ".lokman", ".hyperframes", ".cache", "dist"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", ".loktake", ".lokman", ".hyperframes", ".cache", "dist"]);
 
 // ---------------------------------------------------------------- projets
 
@@ -111,7 +116,7 @@ export async function sourceState(projectDir) {
 
 // ---------------------------------------------------------------- registre des versions
 
-const REGISTRY = (dir) => lokmanPath(dir, "versions.json");
+const REGISTRY = (dir) => loktakePath(dir, "versions.json");
 const EMPTY_REGISTRY = { schema: 1, versions: [] };
 
 export function readRegistry(projectDir) {
@@ -149,7 +154,7 @@ export async function scanVersions(project) {
         else {
           let media = null, error = null;
           try { media = await probe(abs); } catch (e) { error = e.message; }
-          const sidecar = await readJson(`${abs}.lokman.json`, null);
+          const sidecar = (await readJson(`${abs}${SIDECAR_EXT}`, null)) ?? (await readJson(`${abs}${LEGACY_SIDECAR_EXT}`, null));
           v = {
             id: `${slug(path.basename(rel, path.extname(rel)))}-${hash.slice(0, 6)}`,
             kind: sidecar?.kind === "cut" ? "cut" : "render",
@@ -187,7 +192,7 @@ export async function scanVersions(project) {
 /** Instantané de la timeline du code source, avec un niveau de confiance honnête. */
 async function attachTimelines(dir, versions) {
   const src = await sourceState(dir);
-  const cacheFile = lokmanPath(dir, "cache", `timeline-${src.hash}.json`);
+  const cacheFile = loktakePath(dir, "cache", `timeline-${src.hash}.json`);
   let snap = await readJson(cacheFile, null);
   if (!snap) {
     try { snap = await readTimeline(dir); } catch (e) { snap = { error: e.message }; }

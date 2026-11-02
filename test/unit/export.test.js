@@ -24,7 +24,7 @@ test("le texte pour Claude liste les demandes et les fichiers sources", () => {
 });
 
 test("un montage est présenté comme une coupe MP4, jamais comme une modification du code", () => {
-  const cut = { id: "c1", kind: "cut", file: "renders/lokman-montages/film-v1__montage-01.mp4", derivedFrom: "v1",
+  const cut = { id: "c1", kind: "cut", file: "renders/loktake-montages/film-v1__montage-01.mp4", derivedFrom: "v1",
     edl: { removed: [{ start: 2, end: 3 }] }, media: { duration: 9, fps: 30, frames: 270 }, timeline: base.timeline };
   const t = buildClaudeText({ project, version: cut, versions: [base, cut], annotations: [ann({ time: 5 })], montages: [cut] });
   assert.match(t, /\*\*MP4 monté\*\*/);

@@ -2,7 +2,7 @@
 import { formatAnnotationTime, formatTime, frameAt, statusLabel } from "./format.js";
 import { cutToBase, keptSegments, removedTotal } from "./timemap.js";
 
-const kindLabel = (v) => (v.kind === "cut" ? "MP4 monté par Lokman Visuals" : "rendu HyperFrames");
+const kindLabel = (v) => (v.kind === "cut" ? "MP4 monté par LokTake" : "rendu HyperFrames");
 
 /**
  * @param {object} p
@@ -75,7 +75,7 @@ export function buildClaudeText({ project, version, versions = [], annotations, 
   if (cutLines.length) {
     L.push("## Coupes faites sur le MP4 uniquement (pas sur le code)");
     L.push("");
-    L.push("Ces coupes ont été faites dans Lokman Visuals sur un fichier vidéo. Elles **ne modifient pas** le projet HyperFrames.");
+    L.push("Ces coupes ont été faites dans LokTake sur un fichier vidéo. Elles **ne modifient pas** le projet HyperFrames.");
     L.push("Si elles doivent devenir définitives, reporte-les dans le code source (retirer ou raccourcir les scènes concernées, ajuster `data-start` / `data-duration`, les animations GSAP et l'audio).");
     L.push("");
     L.push(...cutLines, "");

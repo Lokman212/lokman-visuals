@@ -8,7 +8,8 @@ import { run } from "./media.js";
 const require = createRequire(import.meta.url);
 
 export function hyperframesBin() {
-  if (process.env.LOKMAN_HYPERFRAMES_BIN) return process.env.LOKMAN_HYPERFRAMES_BIN;
+  const override = process.env.LOKTAKE_HYPERFRAMES_BIN || process.env.LOKMAN_HYPERFRAMES_BIN;
+  if (override) return override;
   const pkgPath = require.resolve("hyperframes/package.json");
   const pkg = require(pkgPath);
   const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin.hyperframes;
